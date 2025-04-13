@@ -1,4 +1,5 @@
 import json, sys, random, os
+import re
 
 HOW_MANY_BOOK = 3
 LINE = 128
@@ -10,12 +11,35 @@ line_number = 0
 char_window = []
 
 
-def add_page():
-    global line_number, line_window, pages, page_number
-    page_number += 1
-    pages[page_number] = dict(line_window)
-    line_window.clear()
-    line_number = 0
+def clean_line(line):
+    return line.strip().replace('-', '') + ' '
+
+
+def process_books(*paths):
+    for path in paths:
+        # print(f'reading {path}')
+        read_book(path)
+        # print(f'{len(pages)}, {len(pages[1])}, {pages[len(pages)]}')
+
+def read_book(file_path):
+    global char_window
+    with open(file_path, 'r', encoding='utf-8-sig') as fp:
+        for line in fp:
+            line = clean_line(line)
+            if line.strip():
+                for c in line:
+                    process_char(c)
+    if len(char_window) > 0:
+        add_line()
+    if len(line_window) > 0:
+        add_page()
+
+
+def process_char(char):
+    global char_window
+    char_window.append(char)
+    if len(char_window) == LINE:
+        add_line()
 
 
 def add_line():
@@ -25,25 +49,37 @@ def add_line():
     char_window.clear()
 
 
-def clean_line(line):
-    return line.strip().replace('-', '') + ' '  # Adding a space instead of a newline.
+
+def process_page(line, line_num):
+    global line_window, pages, page_number
+    line_window[line_num] = line
+    if len(line_window) == PAGE:
+        add_page()
 
 
-def decrypt(rev_code_book, ciphertext):
-    plaintext = []
-    for cc in re.findall(r'\d+-\d+-\d+', ciphertext):
-        page, line, char = cc.split('-')
-        plaintext.append(
-            rev_code_book[page][line][int(char)])
-    return ''.join(plaintext)
+def add_page():
+    global line_number, line_window, pages, page_number
+    page_number += 1
+    pages[page_number] = dict(line_window)
+    line_window.clear()
+    line_number = 0
 
 
-def encrypt(code_book, message):
-    cipher_text = []
-    for char in message:
-        index = random.randint(0, len(code_book[char]) - 1)
-        cipher_text.append(code_book[char].pop(index))
-    return '-'.join(cipher_text)
+
+def generate_code_book():
+    global pages
+    code_book = {}
+    for page, lines in pages.items():
+        for num, line in lines.items():
+            for pos, char in enumerate(line):
+                code_book.setdefault(char, []).append(f'{page}-{num}-{pos}')
+    return code_book
+
+
+def save(file_path, book):
+    with open(file_path, 'w') as fp:
+        # json.dump(book, fp, indent=4)
+        json.dump(book, fp)
 
 
 def load(file_path, *key_books, reverse=False):
@@ -61,20 +97,35 @@ def load(file_path, *key_books, reverse=False):
             return code_book
 
 
-def generate_code_book():
-    global pages
-    code_book = {}
-    for page, lines in pages.items():
-        for num, line in lines.items():
-            for pos, char in enumerate(line):
-                code_book.setdefault(char, []).append(f'{page}-{num}-{pos}')
-    return code_book
+def encrypt(code_book, message):
+    cipher_text = []
+    for char in message:
+        index = random.randint(0, len(code_book[char]) - 1)
+        cipher_text.append(code_book[char].pop(index))
+    return '-'.join(cipher_text)
+
+
+def decrypt(rev_code_book, ciphertext):
+    plaintext = []
+    for cc in re.findall(r'\d+-\d+-\d+', ciphertext):
+        page, line, char = cc.split('-')
+        plaintext.append(
+            rev_code_book[page][line][int(char)])
+    return ''.join(plaintext)
+
+
+def main_menu():
+    print("""1). Encrypt
+2). Decrypt
+3). Quit
+""")
+    return int(input("Make a selection [1,2,3]: "))
 
 
 def main():
-    key_books = ('books/War_and_Peace.txt', 'books/Moby_Dick.txt', 'books/Dracula.txt')
-    code_book_path = 'code_books/dmdwp.txt'
-    rev_code_book_path = 'code_books/dmdwp_r.txt'
+    key_books = ('books/War and Peace.txt', 'books/shake.txt', 'books/The Great Gatsby.txt')
+    code_book_path = 'code_books/book2.json'
+    rev_code_book_path = 'code_books/book2_r.json'
     while True:
         try:
             choice = main_menu()
@@ -95,52 +146,24 @@ def main():
             print("Improper selection.")
 
 
-def main_menu():
-    print("""1). Encrypt
-2). Decrypt
-3). Quit
-""")
-    return int(input("Make a selection [1,2,3]: "))
 
-
-def process_books(*paths):
-    for path in paths:
-        read_book(path)
-
-
-def process_char(char):
-    global char_window
-    char_window.append(char)
-    if len(char_window) == LINE:
-        add_line()
-
-
-def process_page(line, line_num):
-    global line_window, pages, page_number
-    line_window[line_num] = line
-    if len(line_window) == PAGE:
-        add_page()
-
-
-def read_book(file_path):
-    global char_window
-    with open(file_path, 'r', encoding='utf-8-sig') as fp:
-        for line in fp:
-            line = clean_line(line)
-            if line.strip():
-                for c in line:
-                    process_char(c)
-    if len(char_window) > 0:
-        add_line()
-    if len(line_window) > 0:
-        add_page()
-
-
-def save(file_path, book):
-    with open(file_path, 'w') as fp:
-        # json.dump(book, fp, indent=4)
-        json.dump(book, fp)
 
 
 if __name__ == '__main__':
     main()
+
+
+
+
+# process_books('./books/shake.txt','./books/The Great Gatsby.txt','./books/war and peace.txt')
+# cb = generate_code_book()
+# save('./code_books/book1.json', cb)
+# cb = load('./code_books/book1_r.json','./books/shake.txt','./books/The Great Gatsby.txt','./books/war and peace.txt', reverse=True)
+# print(cb)
+# message = input("type your secret message: ")
+# print(encrypt(load('./code_books/book1.json','./books/shake.txt','./books/The Great Gatsby.txt','./books/war and peace.txt'), message))
+# ciphertext = '350-31-119-448-62-118-274-14-35-368-52-85-457-33-77-372-51-102-257-18-38'
+# print(decrypt(load('./code_books/book1_r.json','./books/shake.txt','./books/The Great Gatsby.txt','./books/war and peace.txt', reverse=True), ciphertext))
+
+
+
